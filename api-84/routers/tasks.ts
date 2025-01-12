@@ -2,25 +2,19 @@ import express from "express";
 import Task from "../models/Task";
 import mongoose from "mongoose";
 import auth, {RequestWithUser} from "../middleware/auth";
-import User from "../models/User";
 
 const tasksRouter = express.Router();
 
-tasksRouter.post('/', auth, async (req:RequestWithUser, res, next) => {
+tasksRouter.post('/', auth, async (req, res, next) => {
+    let expressReq = req as RequestWithUser;
+    const user = expressReq.user;
+    if (!user) {
+        res.status(400).send({error: 'User not found'});
+        return;
+    }
    try{
-       if(!req.user || !req.user._id){
-           res.status(400).send({error: "Invalid or missing user ID"});
-           return;
-       }
-
-       const usersById = await User.findById(req.user._id);
-
-       if(!usersById){
-           res.status(400).send({error: "User does not exist"});
-       }
-
        const newTask = new Task({
-           user: req.user?._id,
+           user: user._id,
            title: req.body.title,
            description: req.body.description,
            status: req.body.status,
@@ -34,22 +28,69 @@ tasksRouter.post('/', auth, async (req:RequestWithUser, res, next) => {
                message: error.errors[key].message,
            }))
            res.status(400).send({error: ValidationError});
+           return;
        }
        next(error);
    }
 })
 
-tasksRouter.get('/',auth,  async (req:RequestWithUser, res, next) => {
+tasksRouter.get('/',auth,  async (req, res, next) => {
+    let expressReq = req as RequestWithUser;
+    const user = expressReq.user;
+    if (!user) {
+        res.status(400).send({error: 'User not found'});
+        return;
+    }
+
     try{
-        if( !req.user || !req.user._id){
+        if( !user || !user._id){
             res.status(400).send({error: "User not authenticated"});
         }
 
-        const task = await Task.find({user: req.user?._id});
+        const task = await Task.find({user: user._id});
         res.send(task);
     }catch (error){
         next(error);
     }
 })
+
+tasksRouter.delete('/:id', auth, async (req, res, next) => {
+
+    let expressReq = req as RequestWithUser;
+    const user = expressReq.user;
+    if (!user) {
+        res.status(400).send({error: 'User not found'});
+        return;
+    }
+    const taskById = req.params.id;
+
+    try {
+        const task = await Task.findById(taskById);
+
+        if(!task){
+            res.status(400).send({error: "Task not found"});
+            return ;
+        }
+
+        if(task.user.toString() !== user._id.toString()){
+            res.status(403).send({error: "User does not exist"});
+            return ;
+        }
+
+        await Task.findByIdAndDelete(taskById)
+        res.send({ message: 'Task was deleted' });
+
+    } catch (error) {
+        if (error instanceof mongoose.Error.ValidationError) {
+            const validationErrors = Object.keys(error.errors).map(key => ({
+                field: key,
+                message: error.errors[key].message,
+            }));
+            res.status(400).send({ error: validationErrors });
+            return
+        }
+        next(error);
+    }
+});
 
 export default tasksRouter;

@@ -4,10 +4,11 @@ import {Users} from "../types";
 import User from "../models/User";
 
 export interface RequestWithUser extends Request {
-    user?: HydratedDocument<Users>;
+    user: HydratedDocument<Users>;
 }
 
-const auth = async (req: RequestWithUser, res: Response, next: NextFunction) => {
+const auth = async (expressReq: Request, res: Response, next: NextFunction) => {
+    const req = expressReq as RequestWithUser;
 
     const token = req.get("Authorization");
 
