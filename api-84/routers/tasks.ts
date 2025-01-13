@@ -93,4 +93,61 @@ tasksRouter.delete('/:id', auth, async (req, res, next) => {
     }
 });
 
+tasksRouter.put('/:id', auth, async (req, res, next) => {
+    let expressReq = req as RequestWithUser;
+    const user = expressReq.user;
+    if (!user) {
+        res.status(400).send({error: 'User not found'});
+        return;
+    }
+
+    const taskById = req.params.id;
+
+    try{
+        if(!taskById){
+           res.status(400).send({error: "Id params mist be in url"});
+           return;
+        }
+
+        const task = await Task.findById(taskById);
+
+        if(!task) {
+            res.status(400).send({error: "Task not found"});
+            return;
+        }
+
+        if( task.user.toString() !== user._id.toString()){
+            res.status(403).send({error: "You cannot edit task"});
+            return
+        }
+        if(req.body.user){
+            res.status(400).send({error: "User filed must not be in request "});
+            return;
+        }
+
+        if(req.body.status && !['new', 'in_progress', 'completed'].includes(req.body.status)){
+            res.status(400).send({error: "status not found "});
+            return;
+        }
+
+        const updatedTask = await Task.findByIdAndUpdate(taskById, req.body, {new: true});
+
+        if(!updatedTask){
+            res.status(400).send({error: "Filed to update task"});
+        }
+
+        res.send({message: 'Task updated', updatedTask});
+    }catch(error){
+        if (error instanceof mongoose.Error.ValidationError) {
+            const validationErrors = Object.keys(error.errors).map(key => ({
+                field: key,
+                message: error.errors[key].message,
+            }));
+            res.status(400).send({ error: validationErrors });
+            return
+        }
+        next(error);
+    }
+})
+
 export default tasksRouter;
